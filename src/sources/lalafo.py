@@ -14,6 +14,7 @@ param, so it's passed in explicitly rather than parsed from listing text.
 
 import json
 import re
+import sys
 import time
 
 import requests
@@ -23,7 +24,18 @@ from src.models import Listing
 
 SOURCE = "lalafo"
 BASE_URL = "https://lalafo.kg"
-USER_AGENT = "rental-monitor-bot/1.0 (personal apartment search script)"
+
+# Realistic browser headers -- lalafo.kg is fronted by a bot-check layer
+# that can serve a challenge page to non-browser-looking requests.
+REQUEST_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+    ),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "ru,en;q=0.9",
+    "Referer": "https://lalafo.kg/",
+}
 
 # Room count -> category URL. Room count comes from which URL was fetched,
 # not from parsing listing text.
@@ -45,7 +57,16 @@ AD_LINK_RE = re.compile(r"/[a-z-]+/ads/[^\"'#?]*-id-(\d+)")
 
 
 def _fetch_html(url: str) -> str:
-    response = requests.get(url, headers={"User-Agent": USER_AGENT}, timeout=15)
+    response = requests.get(url, headers=REQUEST_HEADERS, timeout=15)
+    if response.status_code != 200:
+        notable_headers = {
+            key: value
+            for key, value in response.headers.items()
+            if key.lower().startswith(("cf-", "server"))
+        }
+        print(f"[lalafo] non-200 response ({response.status_code}) for {url}", file=sys.stderr)
+        print(f"[lalafo] notable headers: {notable_headers}", file=sys.stderr)
+        print(f"[lalafo] body preview: {response.text[:300]!r}", file=sys.stderr)
     response.raise_for_status()
     return response.text
 

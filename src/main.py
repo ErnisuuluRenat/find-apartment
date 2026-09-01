@@ -1,10 +1,13 @@
 """Orchestrates one run: fetch every source -> filter -> dedup -> notify -> save state.
 
-No try/except around any source's fetch call, deliberately: a missing
-credential (see notify.py / telegram_channels.py) or a network failure
-should crash the whole run loudly rather than silently producing a partial
-result.
+Each source's fetch_all() is isolated in its own try/except: if one source
+raises (blocked, credentials missing, network error, whatever), that's
+logged clearly and it contributes an empty list for this run instead of
+crashing the whole script -- House.kg and Telegram should still produce
+notifications even if Lalafo is temporarily blocked, and vice versa.
 """
+
+import sys
 
 import config
 from src import dedup, geo, notify
@@ -27,12 +30,20 @@ def _passes_price_filter(listing: Listing) -> bool:
     return listing.price <= config.PRICE_CEILING
 
 
+def _fetch_source(name: str, fetch_all) -> list[Listing]:
+    try:
+        return fetch_all()
+    except Exception as exc:
+        print(f"[main] source {name!r} failed, treating as empty: {exc}", file=sys.stderr)
+        return []
+
+
 def fetch_all_listings() -> list[Listing]:
-    return (
-        lalafo.fetch_all()
-        + house_kg.fetch_all()
-        + telegram_channels.fetch_all()
-    )
+    listings: list[Listing] = []
+    listings.extend(_fetch_source("lalafo", lalafo.fetch_all))
+    listings.extend(_fetch_source("house_kg", house_kg.fetch_all))
+    listings.extend(_fetch_source("telegram", telegram_channels.fetch_all))
+    return listings
 
 
 def main() -> None:
