@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+
+# Virtual environment
+.venv/
+venv/
+
+# Environment / secrets (credentials belong in GitHub Actions secrets, not the repo)
+.env
+.env.*
+
+# OS
+.DS_Store
+
+# Editors
+.vscode/
+.idea/
