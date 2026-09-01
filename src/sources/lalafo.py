@@ -17,25 +17,25 @@ import re
 import sys
 import time
 
-import requests
 from bs4 import BeautifulSoup
+from curl_cffi import requests as curl_requests
 
 from src.models import Listing
 
 SOURCE = "lalafo"
 BASE_URL = "https://lalafo.kg"
 
-# Realistic browser headers -- lalafo.kg is fronted by a bot-check layer
-# that can serve a challenge page to non-browser-looking requests.
+# lalafo.kg is fronted by Cloudflare, which fingerprints TLS/HTTP2 behavior,
+# not just headers -- curl_cffi's impersonate="chrome" matches a real
+# Chrome's TLS ClientHello and sets a consistent Chrome header set (UA,
+# sec-ch-ua, Accept, etc.) itself. Only override what's actually
+# content-specific to this request; Accept-Language defaults to en-US
+# under impersonation, so it's set explicitly for a Russian-language site.
 REQUEST_HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-    ),
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     "Accept-Language": "ru,en;q=0.9",
     "Referer": "https://lalafo.kg/",
 }
+IMPERSONATE = "chrome"
 
 # Room count -> category URL. Room count comes from which URL was fetched,
 # not from parsing listing text.
@@ -57,7 +57,9 @@ AD_LINK_RE = re.compile(r"/[a-z-]+/ads/[^\"'#?]*-id-(\d+)")
 
 
 def _fetch_html(url: str) -> str:
-    response = requests.get(url, headers=REQUEST_HEADERS, timeout=15)
+    response = curl_requests.get(
+        url, headers=REQUEST_HEADERS, impersonate=IMPERSONATE, timeout=15
+    )
     if response.status_code != 200:
         notable_headers = {
             key: value
